@@ -103,6 +103,7 @@
   (is (equalForms testTree (zippertreeToJson (zip/root testZip))))   ;; insert tree in zipper and extract it (undamaged)
   (is (equalForms res_1 (zippertreeToJson (zip/root (zip/append-child testZip insElement)))))
   (is (equalForms res_1 (zippertreeToJson (zip/root (zip/insert-child testZip insElement)))))
+  (is (equalForms res_1 (jsonRoot (zip/insert-child testZip insElement))))
   (is (equalForms res_2 (zippertreeToJson (zip/root (zip/append-child (zip/right (zip/down (zip/down testZip))) insElement)))))
   (is (equalForms res_3 (->> insElement
 			    (zip/insert-child (-> testZip (zip/down) (zip/down) (zip/right)))
