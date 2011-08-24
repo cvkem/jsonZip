@@ -2,9 +2,7 @@
   (:require (clojure [zip :as zip] [walk :as walk]))
   (:require clojure.pprint)
   )
-;  (:gen-class))
 
-;;  (:use [vinzi.drepl :as dr])
 
 
 (def jsonTypeMap ::jsonMap)
@@ -12,10 +10,8 @@
 
 
 (defn jsonToZippertree
-  "Transform a (json) nested map to a tree that can be editted via the Zipper
-toolset. The nested map is not directly edittable as you can not insert
-children via the Edit/Replace functionality.
-The keys and path-strings are stored in the metadata as :json/key  and :json/path.
+  "Transform an in-memory json structure (a nested hash-map/vector) to a tree that can be editted via the Zipper toolset. The nested map is not directly edittable as you can not insert children via the Edit/Replace functionality. The zipperTree resolves this by splitting each map in a set of basic elements, while all compound elements (maps and vectors) are stored in a vector with key :jsonChildren. Vectors are stored as a map with only one key { :jsonChildren  [...] }
+The (original) keys and path-strings are stored in the metadata as :json/key  and :json/path.
 NOTE: The path :json/path differs from the path maintained by the zipper as the tree-structure is modified."
    ([node]
 ;;      (println "jsonZipper with one argument. Assuming currPath @ root ")
@@ -40,7 +36,7 @@ NOTE: The path :json/path differs from the path maintained by the zipper as the 
 			     _  (assert (< (count gbkv) 3))  ;; (only values true and false present)
 			     vc (map second kvc)    ;; flatten compound keys to a sequence (discard keys)
 			     jsonChild (if (> (count vc) 0)          
-					 (list :jsonChildren vc)     ;; ?? reverse removed ??
+					 (list :jsonChildren vc)     
 					 '())
 			     nKvs (concat (flatten kvb) jsonChild)   ;; new key-value pairs
 			     newNode  (apply array-map nKvs)         ;; array-map to keep tings in order
@@ -71,7 +67,7 @@ NOTE: The path :json/path differs from the path maintained by the zipper as the 
 	    (boxWithMeta node metadata))))))
 
 (defn zippertreeToJson
-  "Translate a vinzi.jsonzipperTree back to a hash-map (json structure)"
+  "Translate a vinzi.jsonzipperTree back to a hash-map (an in-memory json structure)"
   [node]
   (let [processMap (fn [node]
 		   (let [jsonChild (:jsonChildren node)
@@ -127,14 +123,17 @@ NOTE: The path :json/path differs from the path maintained by the zipper as the 
 
 
 (defn jsonZipper
-  "create a jsonZipper that can be used with the standard clojure.zip tools"
-  [root]
+  "Creates a jsonZipper which can be modified (processed) the functions from clojure.zip (such as up, down, left, right, insert, remove, ...) . The jsonRoot should represent a clojure map that represents a json-structure."
+  [jsonRoot]
   (zip/zipper jsonBranch?
 	  jsonChildren
 	  jsonMakeNode
-	  (jsonToZippertree root)))
+	  (jsonToZippertree jsonRoot)))
 
-
+(defn jsonRoot
+  "Extract the root of a jsonZipper and transform the resulting zipperTree to an in-memory json object."
+  [node]
+(zippertreeToJson (zip/root node)))
 
 ;;
 ;; helper routines for pretty-printing data, extracting  meta-data, extracting path etc...
@@ -257,163 +256,3 @@ This function is only used for compound elements (collections) that will be inse
       "NONE")
     (jsonPathStr (jsonPathList data))))  ;; data is a node. Extract it's pathList
 
-
-
-;;;;;  Tijdelijk
-(comment 
-;;(require 'clojure.zip :as 'zip)
-;;(use 'clojure.walk)
-;;(use 'clojure.pprint)
-
-
-;; helper routines to bring structure to canonical-form
-(defn- strCompare [x y]
-  (compare (str x) (str y)))
-
-(defn- sort-map [m]
-  (into (sorted-map-by strCompare) m))
-
-(defn- sort-set [s]
-  (into (sorted-set-by strCompare) s))
-
-(defn- sForm [f]
-  (if (map? f)
-    (sort-map f)
-    (if (set? f)
-      (sort-set f)
-      f)))
-
-(defn sortForm [f]
-  (walk/postwalk sForm f))
-
-(defn equalForms [x y]
-  (let [sx  (sortForm x)
-	sy  (sortForm x)]
-    (println  "equalForms")
-    (print "with x: ") (clojure.pprint/pprint sx)
-    (print "with y: ") (clojure.pprint/pprint sy)
-    (= 0 (strCompare sx sy))))
-
-;; end helper routines
-
-;;
-;; The test data
-;;
-
-
-(def testTree {:level_0	{:level_0_1  "de titel"
-			 :level_0_2   []
-			 :level_0_3  ["text"]}
-	       :level_1  {:level_1_1 3
-		       :level_1_2 5}
-	       :level_2  "de file"})
-
-(def modTestTree (jsonToZippertree testTree))
-
-(def testZip (jsonZipper testTree))
-
-(def backJson (zippertreeToJson modTestTree))
-
-
-(def res2 {:level_0	{:level_0_1  "de titel"
-			 :level_0_2   []
-			 :level_0_3  ["text"]}
-	       :level_1  {:level_1_1 3
-		       :level_1_2 5}
-	   :level_2  "de file"
-           "TEST"      "inserted"})
-
-
-
-)
-
-;;;;;;;;;;;;; END tijdelijk
-
-
-
-
-
-
-
-
-
-
-
-;;
-;;Test data and test routines
-;;(Should move to a the leiningen-test namespace)
-;; Initially I did not use automated testing as visual inspection is needed for the tests below
-;; (the Zipper-datastructure in which the test-results are embedded complicates things a bit.)
-;;
-
-(comment  ;;; stuff to test it
-
-(def testTree {:level_0	{:level_0_1  "de titel"
-			 :level_0_2   []
-			 :level_0_3  ["text"]}
-	       :level_1  {:level_1_1 3
-		       :level_1_2 5}
-	       :level_2  "de file"})
-
-(def modTestTree (jsonToZippertree testTree))
-
-(def testZip (jsonZipper testTree))
-
-
-
-
-
-(def backJson (zippertreeToJson modTestTree))
-
-;; (def testZip (zip/zipper
-;; 	   jsonBranch?
-;; 	   jsonChildren
-;; 	   jsonMakeNode
-;; 	   (jsoToZipper testTree)))
-
-
-
-;; only used for testing
-(use 'com.georgejahad.difform)
-
-
-(defn testdiff []
-  (difform testTree  (zippertreeToJson (jsonToZippertree testTree))))
-
-(defn test0 []
-  (println "show root")
-  (clojure.pprint/pprint (zip/node testZip)))
-
-
-(defn test1 []
-  (println "add node at root")
-  (clojure.pprint/pprint (zip/node (zip/append-child testZip {"TEST" "inserted"}))))
-
-(defn test2 []
-  (println "add node at 1 down and go to up again")
-  (clojure.pprint/pprint (zip/node (zip/up (zip/append-child (zip/down testZip) {"TEST" "inserted"})))))
-
-
-(defn test3 []
-  (println "add node at 1 down and go to root")
-  (clojure.pprint/pprint (zip/root (zip/append-child (zip/right (zip/down testZip)) {"TEST" "inserted"}))))
-
-					;)
-
-(defn test4 []
-  (print "Find the pathstring of root: ")
-  (println (jsonPathStr testZip)) 
-  (println)
-  (print "Find the pathstring of 1 down: ")
-  (println (jsonPathStr (zip/down testZip)))
-  (println)
-  ;;
-  (print "Find the pathstring of 1 down and 1 to the right: ")
-  (println (jsonPathStr (zip/right (zip/down testZip))))
-  (println)
-  ;;	   
-  (print "Find the pathstring of 2 down: ")
-  (println (jsonPathStr (zip/down (zip/down testZip))))
-  (println))
-
-)

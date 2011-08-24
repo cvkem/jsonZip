@@ -1,13 +1,33 @@
 # jsonZip
 
-FIXME: write description
+The jsonZip library is a clojure library to traverse an in-memory json-object (a nexted hash-map/vector) using the Huet zipper. In memory json-objects can be generated using the clojure.contrib.json library. Functions from the clojure.zip library can be used to modify this datastructure and extract the root of the modified tree.
 
-## Usage
 
-FIXME: write
+(defn jsonZipper [jsonRoot] ...)
+Creates a jsonZipper which can be modified (processed) the functions from clojure.zip (such as up, down, left, right, insert, remove, ...) . The jsonRoot should represent a clojure map that represents a json-structure.
+
+(defn jsonRoot [node] ...)
+Extract the root of a jsonZipper and transform the resulting zipperTree to an in-memory json object.
+
+
+The nested map is not directly edittable as you can not insert children via the Edit/Replace functionality. The zipperTree resolves this by splitting each map in a set of basic elements, while all compound elements (maps and vectors) are stored in a vector with key :jsonChildren. Vectors are stored as a map with only one key { :jsonChildren  [...] }
+The (original) keys and path-strings are stored in the metadata as :json/key  and :json/path. Internally the next two routines are used to transform between these two representations.
+
+
+(defn jsonToZippertree [root] ...)
+Transform an in-memory json structure (a nested hash-map/vector) to a tree that can be editted via the Zipper toolset. 
+
+(defn zippertreeToJson  [node]  ..)
+Translate a vinzi.jsonzipperTree back to a hash-map (an in-memory json structure). You can used clojure.contrib.json to store the in-memory map to a file. when you extract the root from a jsonZipper you still need to apply this function to turn it into a in-memory json object.
+
+
+Furthermore the library contains a few helper functions to extract the path to a node and extract the key-data of tree-elements (key-data is stored as meta-data.
+
+
+
 
 ## License
 
-Copyright (C) 2010 FIXME
+Copyright (C) 2010 Vinzi
 
 Distributed under the Eclipse Public License, the same as Clojure.
