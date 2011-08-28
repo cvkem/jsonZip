@@ -8,6 +8,9 @@
 	      [duck-streams :as ds :only [reader]]])
   (:require [clojure.zip :as zip]))
 
+(println)
+(println "You should consider to run the test-suite of package vinzi.jsonDiff for an additional set of testcases!!!")
+
 ;;(def *stack-trace-depth* 10)
 
 ;(comment 
