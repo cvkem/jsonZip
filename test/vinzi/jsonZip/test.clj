@@ -176,3 +176,69 @@
 (deftest testSuite3
   (is (equalForms largeJson  (zippertreeToJson (jsonToZippertree largeJson))))  ;; transform json and transform back
   )
+
+;;;;;;;;;;;;;;;
+;; test 4   Key handling for vectors (using the "id" field or not)
+;;
+
+(def test4a (jsonZipper [{"NO-id" 1  :b "mod-string"}
+			 {"test" 2  :b  3}
+			 ]))
+(def key4a "[0]")
+
+(def test4b (jsonZipper [{"id" 1  :b "mod-string"}
+			 {"test" 2  :b  3}
+			 ]))
+(def key4b "1")
+
+(def test4c (jsonZipper [{"id" 1  :b "mod-string"}
+			 {"id" 2  :b  3}
+			 ]))
+(def key4c "1")
+
+
+(def key4de "ABCD")
+(def test4d (jsonZipper [{"id" key4de  :b "mod-string"}
+			 {"id" 2  :b  3}
+			 ]))
+
+(def key4e "XYZ")
+(def test4e (jsonZipper {:a [{"id" key4de  :b "mod-string"}
+			     {"id" 2  :b  3}
+			     ]
+			 :z "test"}))
+
+
+(deftest testSuite4
+  (is  (= (jsonKey (zip/down test4a)) key4a))
+  (is  (= (jsonKey (zip/down test4b)) key4b))
+  (is  (= (jsonKey (zip/down test4c)) key4c))
+  (is  (= (jsonKey (zip/down test4d)) key4de))
+  (is  (= (jsonKey (zip/down (zip/down test4e))) key4de))
+  )
+
+
+;;;;;;;;;;;;;;;;;;
+;;  test 5   insert, delete and change
+(def test5a (jsonZipper {:a 1
+			 :b 2
+			 }))
+
+(def test5b (jsonZipper [1])) 
+
+(deftest testSuite5
+  (is (equalForms (jsonRoot (insertItem  test5a ["/"] :c "string")) {:a 1 :b 2 :c "string"}))
+  (is (equalForms (jsonRoot (insertItem  test5a ["/"] :c 1)) {:a 1 :b 2 :c 1}))
+  (is (equalForms (jsonRoot (insertItem  test5a ["/"] :c [\a \b \c])) {:a 1 :b 2 :c [\a \b \c]}))
+  (is (equalForms (jsonRoot (deleteItem  test5a ["/"] :a)) {:b 2}))
+  (is (equalForms (jsonRoot (deleteItem (deleteItem  test5a ["/"] :a)
+					["/"] :b)) {}))
+  (is (-> test5a
+	  (deleteItem ["/"] :a)
+	  (deleteItem ["/"] :b)
+	  (jsonRoot)
+	  (equalForms {})))
+  (is (-> test5b
+	  (deleteItem ["/"] "[0]")
+	  (equalForms [])))
+  )
