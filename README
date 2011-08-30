@@ -21,8 +21,19 @@ Transform an in-memory json structure (a nested hash-map/vector) to a tree that 
 Translate a vinzi.jsonzipperTree back to a hash-map (an in-memory json structure). You can used clojure.contrib.json to store the in-memory map to a file. when you extract the root from a jsonZipper you still need to apply this function to turn it into a in-memory json object.
 
 
-Furthermore the library contains a few helper functions to extract the path to a node and extract the key-data of tree-elements (key-data is stored as meta-data.
+Furthermore the library contains a few helper functions to extract the path to a node and extract the key-data of tree-elements (key-data is stored as meta-data:
 
+(defn insertItem  [loc pathList key json]  ...)
+(defn replaceItem  [loc pathList key json]  ...)
+(defn removeItem  [loc pathList key] ...)
+
+The parameters for these functions are:
+ - loc:  A jsonZipper  (at an arbitrary location)
+ - pathList: A vector describing a path from root to the parent of the key that needs to be modified, ie. ["/" "file"] is the path to the element "file" at top level and [] represents the root element (everything in the zipper)
+ - key: the key of the that needs to be processed. This will become the key of the child, or in case of an insertion of a simple elelement in a map the key used to store it.
+ -json: a json representation of the object that needs to be inserted or replaced.
+The return value is a modified zipper (located at the point where the last mutation was applied). In case of an error it returns nil (no silent continuation).
+NOTE: insertItem assumes that the element to be inserted exists, while replace-path assumes the element to be non-existent
 
 
 This free open-source software is provided as is without any waranties. Please test it in your problem domain. If you note any problems, please report the issue via Github repository.

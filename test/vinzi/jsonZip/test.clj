@@ -16,6 +16,7 @@
 ;(comment 
 
 ;; helper routines to bring structure to canonical-form
+
 (defn- strCompare [x y]
   (compare (str x) (str y)))
 
@@ -37,11 +38,14 @@
 
 (defn equalForms [x y]
   (let [sx  (sortForm x)
-	sy  (sortForm y)]
-    ;; (println  "equalForms")
-    ;; (print "with x: ") (pprint sx)
-    ;; (print "with y: ") (pprint sy)
-    (= 0 (strCompare sx sy))))
+	sy  (sortForm y)
+	res (strCompare sx sy)]
+    (when (not= res 0)
+      (println  "equalForms:   " res)
+      (print "with x: ") (pprint sx)
+      (print "with y: ") (pprint sy))
+    (= res 0)))
+
 
 ;; end helper routines
 
@@ -174,7 +178,7 @@
 
 
 (deftest testSuite3
-  (is (equalForms largeJson  (zippertreeToJson (jsonToZippertree largeJson))))  ;; transform json and transform back
+;;  (is (equalForms largeJson  (zippertreeToJson (jsonToZippertree largeJson))))  ;; transform json and transform back
   )
 
 ;;;;;;;;;;;;;;;
@@ -224,21 +228,41 @@
 			 :b 2
 			 }))
 
-(def test5b (jsonZipper [1])) 
+(def test5b (jsonZipper ['(1)])) 
 
 (deftest testSuite5
-  (is (equalForms (jsonRoot (insertItem  test5a ["/"] :c "string")) {:a 1 :b 2 :c "string"}))
-  (is (equalForms (jsonRoot (insertItem  test5a ["/"] :c 1)) {:a 1 :b 2 :c 1}))
-  (is (equalForms (jsonRoot (insertItem  test5a ["/"] :c [\a \b \c])) {:a 1 :b 2 :c [\a \b \c]}))
-  (is (equalForms (jsonRoot (deleteItem  test5a ["/"] :a)) {:b 2}))
-  (is (equalForms (jsonRoot (deleteItem (deleteItem  test5a ["/"] :a)
-					["/"] :b)) {}))
+  (is (equalForms (jsonRoot (insertItem  test5a ["/"] :c "string")) {:a 1 :b 2 :c "string"})
+      "Insert a string as kv-pair")
+  (is (equalForms (jsonRoot (insertItem  test5a ["/"] :c 1)) {:a 1 :b 2 :c 1})
+      "Insert a key-value (integer) in a map")
+  (is (equalForms (jsonRoot (insertItem  test5a ["/"] :c [\a \b \c])) {:a 1 :b 2 :c [\a \b \c]})
+      "Insert a vector in a map")
+  (is (equalForms (jsonRoot (removeItem  test5a ["/"] :a)) {:b 2})
+      "remove a single item from a map")
+  (is (equalForms (jsonRoot (removeItem (removeItem  test5a ["/"] :a)
+					["/"] :b)) {})
+      "removing all items of a map returns an empty map")
+  (is (equalForms (jsonRoot (replaceItem  test5a ["/"] :b 3)) {:a 1 :b 3})
+      "remove a single item from a map")
+  (is (equalForms (jsonRoot (replaceItem  test5a ["/"] :b [\a \b \c])) {:a 1 :b [\a \b \c]})
+      "remove a single item from a map")
+  (is (equalForms (jsonRoot (replaceItem  test5a ["/"] :a -2)) {:a -2 :b 2})
+      "remove a single item from a map")
   (is (-> test5a
-	  (deleteItem ["/"] :a)
-	  (deleteItem ["/"] :b)
+	  (removeItem ["/"] :a)
+	  (removeItem ["/"] :b)
 	  (jsonRoot)
-	  (equalForms {})))
+	  (equalForms {}))
+      "removing alle items of a map.")
   (is (-> test5b
-	  (deleteItem ["/"] "[0]")
-	  (equalForms [])))
+	  (removeItem ["/"] "[0]")
+	  (jsonRoot)
+	  (equalForms []))
+      "removing all items from a vector")
+  (is (equalForms (jsonRoot (insertItem  test5b ["/"] [1] "string")) ['(1) "string"])
+      "Insert a string in a vector")
+  (is (equalForms (jsonRoot (insertItem  test5b ["/"] [1] -2)) ['(1) -2])
+      "Insert a map in a vector")
+  (is (equalForms (jsonRoot (insertItem  test5b ["/"] [1] [\a \b \c])) ['(1) [\a \b \c]])
+      "Insert a vector in a map")
   )
