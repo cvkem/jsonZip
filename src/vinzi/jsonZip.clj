@@ -319,10 +319,12 @@ This function is only used for compound elements (collections) that will be inse
 
 
 
-(defn zipTop [z]
+(defn zipTop
+  "Move the zipper to the top of the tree (materializing all changes)"
+  [z]
   (if-let [u (zip/up z)]
     (recur u)
-    z))
+      z))
 
 (defn getKey
   ;; translate a key to an integer if it is a vector-key ("[n]")
@@ -348,10 +350,9 @@ This function is only used for compound elements (collections) that will be inse
 (defn zipLoc
   ;; find the location (starting at the root)
   [z pl]
-  (zipTop z)
   (assert (or (= (first pl) "/") (empty? pl)))
-  (loop [[k ks] (if (seq pl) (rest pl) pl)
-	 z z]
+  (loop [z (zipTop z)
+	 [k ks] (if (seq pl) (rest pl) pl)]
     (if (or (nil? z)
 	    (nil? k))
       z   ;; arrived at location (or nil)

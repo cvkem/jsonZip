@@ -266,3 +266,55 @@
   (is (equalForms (jsonRoot (insertItem  test5b ["/"] [1] [\a \b \c])) ['(1) [\a \b \c]])
       "Insert a vector in a map")
   )
+
+
+(def org4data [0
+	       {:a 1
+		:b "test-string"}
+               2])
+
+(def org4 (jsonZipper org4data))
+
+
+;;;;;;;;;;;;;;;;;;
+;;  test 6: repeat tests one level deeper (insert, delete and change)
+
+;; test 4a
+(def mod4a (jsonZipper
+	    [0
+	     {:a 1
+	      :a1 {:x 1}
+	      :b "test-string"}
+	     2]))
+(def test6a (jsonZipper [0
+			 {:a 1
+			 :b 2
+			 }]))
+
+(def test6b (jsonZipper ['(1)])) 
+
+(deftest testSuite6
+  (is (equalForms (jsonRoot (insertItem  test6a ["/" "[1]"] :c "string")) [0 {:a 1 :b 2 :c "string"}])
+      "Insert a string as kv-pair")
+  (is (equalForms (jsonRoot (insertItem  test6a ["/" "[1]"] :c 1)) [0 {:a 1 :b 2 :c 1}])
+      "Insert a key-value (integer) in a map")
+  (is (equalForms (jsonRoot (insertItem  test6a ["/" "[1]"] :c [\a \b \c])) [0 {:a 1 :b 2 :c [\a \b \c]}])
+      "Insert a vector in a map")
+  (is (equalForms (jsonRoot (removeItem  test6a ["/" "[1]"] :a)) [0 {:b 2}])
+      "remove a single item from a map")
+  (is (equalForms (jsonRoot (removeItem (removeItem  test6a ["/" "[1]"] :a)
+  					["/" "[1]"] :b)) [0 {}])
+      "removing all items of a map returns an empty map")
+  (is (equalForms (jsonRoot (replaceItem  test6a ["/" "[1]"] :b 3)) [0 {:a 1 :b 3}])
+      "remove a single item from a map")
+  (is (equalForms (jsonRoot (replaceItem  test6a ["/" "[1]"] :b [\a \b \c])) [0 {:a 1 :b [\a \b \c]}])
+      "remove a single item from a map")
+  (is (equalForms (jsonRoot (replaceItem  test6a ["/" "[1]"] :a -2)) [0 {:a -2 :b 2}])
+      "remove a single item from a map")
+  (is (-> test6a
+  	  (removeItem ["/" "[1]"] :a)
+  	  (removeItem ["/" "[1]"] :b)
+  	  (jsonRoot)
+  	  (equalForms [0 {}]))
+      "removing alle items of a map.")
+  )
