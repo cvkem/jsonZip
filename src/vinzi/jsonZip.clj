@@ -6,6 +6,12 @@
   )
 
 
+(defmacro dbgi [x] `(let [x# ~x] (do (println "INS " '~x "=" x#) (flush)) x#))
+(defmacro dbgmi [m x] `(let [x# ~x] (do (println "INS " ~m " : " '~x "=" x#) (flush)) x#))
+(defmacro dbgmr [m x] `(let [x# ~x] (do (println "REMOVE "~m " : " '~x "=" x#) (flush)) x#))
+
+;;(defmacro dbgmi [m x] x)
+(defmacro dbgmr [m x] x)
 
 (def jsonTypeMap ::jsonMap)
 (def jsonTypeVector ::jsonVector)
@@ -13,6 +19,32 @@
 (def allowVectorId true)
 
 (def vectorId  "id")
+
+
+;;;;;;;;;;
+;;  helper functions to report errors
+;;
+
+(def zipErrs (atom []))
+
+(defn zipError
+  ([msg] (zipError msg nil))
+  ([msg ret]
+     (println "ERROR: " msg)
+     ;; add to error-queue
+     (swap! zipErrs conj msg)
+     ret))
+
+
+(defn getZipErrors []
+  @zipErrs)
+
+(defn clearZipErrors []
+  (swap! zipErrs (fn [_ _] []) nil))
+
+
+
+
 
 (defn isZipper?
   "Routine to test whether 'zipper' is a real zipper or nil. Used in pre-conditions to prevent extracted nodes from being passed as an argument when actually a zipper is needed."
@@ -24,11 +56,7 @@
 (defn isBoxed? [v]
   (:json/boxed (meta v)))
 
-(defn zipError
-  ([msg] (zipError msg nil))
-  ([msg ret]
-     (println "ERROR: " msg)
-     ret))
+
 
 
 (defn boxWithMeta [node metadata]
@@ -182,11 +210,19 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 ;;
 
 
-(defn pprintJsonZipper
+(defn zipTop
+  "Move the zipper to the top of the tree (materializing all changes)"
+  [z]
+  (if-let [u (zip/up z)]
+    (recur u)
+      z))
+
+
+(defn pprintJsonSubZipper
   "Traverses a jsonZipper structure and pretty-prints the data in the tree and the corresponding meta-data. (Meta-data is used to store the keys of the original Json-structure."
   ([zipper]
      {:pre [(isZipper? zipper)]}
-     (pprintJsonZipper zipper "R"))
+     (pprintJsonSubZipper zipper "R"))
   ([zipper prefix]
      (let [numChild (if (zip/branch? zipper)
 		      (count (zip/children zipper)) -1)
@@ -207,10 +243,17 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 	 (loop [nr 1
 		child (zip/down zipper)]
 	   (when child
-	     (pprintJsonZipper child (str prefix "." nr))
+	     (pprintJsonSubZipper child (str prefix "." nr))
 	     (recur (inc nr) (zip/right child))))
 	 (println)))))
-  
+
+(defn pprintJsonZipper
+  "Traverses a jsonZipper structure starting at the top of the tree and pretty-prints the data in the tree and the corresponding meta-data. (Meta-data is used to store the keys of the original Json-structure."
+  [zipper]
+  {:pre [(isZipper? zipper)]}
+  (pprintJsonSubZipper (zipTop zipper)))
+
+
 (defn nodeContentsHtml
   "Show the contents of the current node as a html-string."
   [zipper]
@@ -318,14 +361,6 @@ This function is only used for compound elements (collections) that will be inse
     (jsonPathStr (jsonPathList data))))  ;; data is a node. Extract it's pathList
 
 
-
-(defn zipTop
-  "Move the zipper to the top of the tree (materializing all changes)"
-  [z]
-  (if-let [u (zip/up z)]
-    (recur u)
-      z))
-
 (defn getKey
   ;; translate a key to an integer if it is a vector-key ("[n]")
   [key]
@@ -337,15 +372,17 @@ This function is only used for compound elements (collections) that will be inse
 
 (defn findChildWithKey
   ;; find the key within the current level of the zipper
-  [z k]
+  ([z k]  (findChildWithKey z k true))
+  ([z k repErr]
   (if z
     (loop [z (zip/down z)]
       (if (or (nil? z)
 	      (= (jsonKey z) k))
 	z
 	(recur (zip/right z))))
-    (zipError (str "key " k " could not be located")))) ;; return nil
-
+    (if repErr ;; return nil
+      (zipError (str "key " k " could not be located"))
+      nil)))) 
 
 (defn zipLoc
   ;; find the location (starting at the root)
@@ -359,6 +396,7 @@ This function is only used for compound elements (collections) that will be inse
       (recur (findChildWithKey z k) ks))))
 
 
+
 (defn processCompoundOper
   "Process an operation 'oper' for a compound object with key 'key' that is a direct child of 'loc'."
   [loc key oper & args]
@@ -369,54 +407,73 @@ This function is only used for compound elements (collections) that will be inse
       (apply oper arguments))
     nil)) ;; failed
 
-
+(defn keyExistsAt
+  "Checks whether a key exists at location 'loc' (either hash-key or child key). This function checks for the keywordized and string version of key."
+  [loc key]
+  (let [node (zip/node loc)
+	keywordComplement (fn [id]
+			    ;; the keywordComplement of id ':name' is
+			    ;; 'name' and vice versa.
+			    (if (keyword? id) (name id) (keyword id)))
+	keyExistsAux  (fn [loc key]
+		       ;; check whether key exists
+		       (or (get node key)
+			   (findChildWithKey loc key false))) ]  ;; find child without reporting error on fail.
+    (let [res (if (keyExistsAux loc key)
+		true ;; key exists
+		(keyExistsAux loc (keywordComplement key)))]
+      (println "RETURN VALUE of keyExists at for " key ": "  res)
+      res)))
 
 (defn removeItem
   "Removes a key field from zipper 'loc' at location 'pathlist'/'key'. Key can refer to a child, or to a basic element of a map."
   [loc pathList key]
-  (if-let [newLoc (zipLoc loc pathList)]
-    (if (= (jsonType newLoc) jsonTypeMap)
+  (if-let [newLoc (dbgmr "parent: " (zipLoc loc pathList))]
+    (if (dbgmr "map?: " (= (jsonType newLoc) jsonTypeMap))
       (let [node (zip/node newLoc)]
 	(if (get node key)
 	  ;; key is a basic key (otherwise compound key(-field))
-	  (zip/replace newLoc (dissoc node key))
-	  (processCompoundOper newLoc key zip/remove)))
-      (processCompoundOper newLoc key zip/remove))
+	    (dbgmr "result (replace basic map-key): " (zip/replace newLoc (dissoc node key)))
+	    (dbgmr "result (replace compound key): " (processCompoundOper newLoc key zip/remove))))
+	(dbgmr "res=non-map item" (processCompoundOper newLoc key zip/remove)))
     nil)) ;; failed
+
+
+
 
 (defn insertItem
   "Insert a field in zipper 'loc' at location 'pathlist'/'key' with contents given by 'json'. This function differentiates between simple and compound values (Compound values will be added as a child)."
   [loc pathList key json]
-		      (if-let [newLoc (zipLoc loc pathList)]
-			(let [node (zip/node newLoc)
-			      vectId (getVectId newLoc)
+		      (if-let [newLoc (dbgmi "parentLoc" (zipLoc loc pathList))]
+			(let [vectId (getVectId newLoc)
 			      vectKey (if (and vectId (coll? json))
 					(json vectId) nil)
 			      _    (when (and vectKey (not= vectKey key))
 				     (zipError (format
 					"vector uses field '%s' as id. Key  '%s' replaced by '%s'"
 					vectId key vectKey)))
-			      key (if vectKey  vectKey key)]
-			  (if (or (get node key)
-				  (findChildWithKey newLoc key))
-			    (zipError (str "node with key " key " exists. Insert failed"))
+			      key (if vectKey  vectKey key)
+			      ]
+			  (if (keyExistsAt newLoc key)
+			    (dbgmi (str  key " exists?:) ") (zipError (str "node with key " key " exists. Insert failed")))
 			    (if (coll? json)
-			      (if (zip/branch? newLoc)
+			      (if (dbgmi "map has children" (zip/branch? newLoc))
 				;; add compound type as an additional child
 				(let [;;item (setJsonKey key (jsonToZippertree json))]
 				      item (jsonToZippertree json {:json/key key})]
-				  (zip/append-child newLoc item))
+				  (dbgmi "res=add compound" (zip/append-child newLoc item)))
 				;; loc has no children yet (so replace full tree)
 				(let [node    (zip/node newLoc)
 				      jsonNode   (zippertreeToJson node)   ;; step is redundant
 				      newNodeContents  (assoc jsonNode key json)
-				      newNode (jsonToZippertree newNodeContents)] ;; generates key
-				  (zip/replace newLoc newNode)))
+				      newNode (dbgmi "newNode with insert " (jsonToZippertree newNodeContents))] ;; generates key
+				  (dbgmi "res=insert first-child" (zip/replace newLoc newNode))))
 			      ;; it is a basic type
-			      (if (= (jsonType newLoc) jsonTypeMap)
-				(zip/replace newLoc (assoc node key json))
-				(let [item (setJsonKey key json)]
-				  (zip/append-child newLoc item))))))
+			      (let [node (zip/node newLoc)]
+				(if (= (jsonType newLoc) jsonTypeMap)
+				  (dbgmi "res=basic type in map: " (zip/replace newLoc (assoc node key json)))
+				  (let [item (setJsonKey key json)]
+				    (dbgmi "res=basic type on non-map" (zip/append-child newLoc item))))))))
 			nil))  ;; search failed, so return nil
 
 (defn zipReplace [z]
@@ -430,6 +487,6 @@ This function is only used for compound elements (collections) that will be inse
     (jsonZipper json)   ;; a full replacement (root is replaced)
     (if-let [newLoc (removeItem loc pathList key)]
       (insertItem newLoc pathList key json)
-      nil)))
+      nil)))  ;; for arrays this implies that replace results in an append (insert is not provided)
 
 

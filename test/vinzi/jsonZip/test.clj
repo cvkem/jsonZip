@@ -175,10 +175,12 @@
 (def largeJson (with-open [data (ds/reader "./data/EIS-poc.cdfde")]
 		 (json/read-json data)))
 
-
+;;;;;;;;;;;;
+;;   test 3   transform a large json file to a zipper and translate it it back.
+;;
 
 (deftest testSuite3
-;;  (is (equalForms largeJson  (zippertreeToJson (jsonToZippertree largeJson))))  ;; transform json and transform back
+  (is (equalForms largeJson  (zippertreeToJson (jsonToZippertree largeJson))))  ;; transform json and transform back
   )
 
 ;;;;;;;;;;;;;;;
@@ -268,24 +270,10 @@
   )
 
 
-(def org4data [0
-	       {:a 1
-		:b "test-string"}
-               2])
-
-(def org4 (jsonZipper org4data))
-
 
 ;;;;;;;;;;;;;;;;;;
 ;;  test 6: repeat tests one level deeper (insert, delete and change)
 
-;; test 4a
-(def mod4a (jsonZipper
-	    [0
-	     {:a 1
-	      :a1 {:x 1}
-	      :b "test-string"}
-	     2]))
 (def test6a (jsonZipper [0
 			 {:a 1
 			 :b 2
@@ -317,4 +305,38 @@
   	  (jsonRoot)
   	  (equalForms [0 {}]))
       "removing alle items of a map.")
+  )
+
+
+
+(def org7data [ -10
+	       -11
+	       -12
+	       -13
+	       -14])
+
+(def org7zip (jsonZipper org7data))
+
+(deftest testSuite7
+  (is (equalForms (insertItem  org7zip ["/"] "[1]" "string")  nil)
+      "Insert in middle of array not possible with index keys.")
+  (is (equalForms (jsonRoot (replaceItem  org7zip ["/"] "[1]" "string"))  [-10 "string" -12 -13 -14])
+      "Insert in middle of array not possible with index keys.")
+  (is (-> org7zip
+  	  (removeItem ["/"] "[1]")
+  	  (jsonRoot)
+  	  (equalForms [-10 -12 -13 -14]))
+      "removing second item of array.")
+  (is (-> org7zip
+  	  (removeItem ["/"] "[1]")
+  	  (removeItem ["/"] "[1]")
+  	  (jsonRoot)
+  	  (equalForms [-10 -13 -14]))
+      "removing second and third item of array.")
+  (is (-> org7zip
+  	  (removeItem ["/"] "[1]")
+  	  (removeItem ["/"] "[2]")
+  	  (jsonRoot)
+  	  (equalForms [-10 -13 -14]))
+      "removing second and third item of array.")
   )
