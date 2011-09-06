@@ -272,12 +272,68 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 	(format "<html>%s</html>" (apply str list_kv)))
       "")))   ;; If no children return "" 
 
+(defn showJsonStructure
+  "Show the structure of a tree by producing an enumerated list of all paths in the tree. A vector is shown as [*] and a map is shown as {<basic keys>|<compound keys>}"
+  [zipper]
+  {:pre [(isZipper? zipper)]}
+  (let [generatePath (fn [node pPath]
+		       ;; generate a path for the current 'node' using 'pPath' as prefix
+		       (let [meta (meta node)
+			     t  (:json/type meta)
+			     cnt (count (:jsonChildren node))]
+			 (if (= t jsonTypeVector)
+;;			   (format "%s/[%s]" pPath cnt)
+			   (format "%s/[*]" pPath cnt)
+			   (if (= t jsonTypeMap)
+			     (let [k  (filter #(not= :jsonChildren %) (keys node))
+				   k  (apply str (interpose "," (map str k)))
+				   mk (:json/key meta)
+				   cnt (count (:jsonChildren node))]
+			       (format "%s/%s{%s|%s}" pPath mk k cnt))
+			     (format "%s(%s)" pPath t)))))
+	addPath  (fn [path cumm]
+		       (let [cnt (cumm path)
+			     cnt (if cnt (inc cnt) 1)]
+			   (assoc cumm path cnt)))
+	findPaths (fn findPaths [loc pPath cumm]
+		    ;; find all paths in zipper 'loc' 'pPath' is path to parent
+		    ;; and 'cumm' contains the discoverd paths where
+		    ;; (keys are path-strings and values are counts.
+		    (let [node (zip/node loc)
+			  path (generatePath node pPath)
+			  cumm (addPath path cumm)]
+		      (loop [child (zip/down loc)
+			     cumm  cumm]
+			(if child
+			  (recur (zip/right child) (findPaths child path cumm))
+			  cumm))))
+	showPaths (fn [res]
+		    ;; print the results to the standard output
+		    (let [smap (into (sorted-map) res)]
+		      (println "The map contains the following paths (count  path)")
+		      ;;		      (doseq [p smap] (println (format "%s   %s"  (val p) (key p)))))) ]
+		      (loop [nr 1
+			     ks (keys smap)
+			     vs (vals smap)]
+			(when (seq ks)
+			  (println (format "%s   %s x %s" nr  (first vs) (first ks)))
+			  (recur (inc nr) (rest ks) (rest vs)))))) ]
+    (-> zipper
+	(zipTop)
+	(findPaths "" {})
+	(showPaths))))
 
+(comment ;; test program for showJsonStructure
+  (load-file "src/vinzi/jsonZip.clj") (in-ns 'vinzi.jsonZip)
+  (use 'clojure.contrib.json) (use 'clojure.contrib.io)   
+  (with-open [f (reader "../cdfdeMgt/data/EIS.cdfde")]
+    (let [s (read-json f)  t (jsonZipper s)] (showJsonStructure t)))
+)
 
 
 
 ;;;;;;;;;;
-;; functions to extract and change the meta-data (data about the structures
+;; functions to extract and change the meta-data (data about the structures).
 ;;
 
 (defn jsonPathList
