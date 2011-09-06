@@ -13,12 +13,22 @@
 ;;(defmacro dbgmi [m x] x)
 (defmacro dbgmr [m x] x)
 
+
+
+
+;;;;;;;;;;;;;;;;;;
+;;  declarations of types and some of the helper functions
+;;
+
 (def jsonTypeMap ::jsonMap)
 (def jsonTypeVector ::jsonVector)
 
 (def allowVectorId true)
 
 (def vectorId  "id")
+
+
+
 
 
 ;;;;;;;;;;
@@ -35,35 +45,24 @@
      (swap! zipErrs conj msg)
      ret))
 
-
 (defn getZipErrors []
   @zipErrs)
 
 (defn clearZipErrors []
   (swap! zipErrs (fn [_ _] []) nil))
 
+(declare isZipper?)
+(declare isBoxed?)
+(declare boxWithMeta)
+(declare zipTop)
 
 
 
 
-(defn isZipper?
-  "Routine to test whether 'zipper' is a real zipper or nil. Used in pre-conditions to prevent extracted nodes from being passed as an argument when actually a zipper is needed."
-  [zipper]
-  (or (nil? zipper)
-      (and (vector? zipper)
-	   (= 2 (count zipper)))))
 
-(defn isBoxed? [v]
-  (:json/boxed (meta v)))
-
-
-
-
-(defn boxWithMeta [node metadata]
-  (if (contains? (parents (class node)) clojure.lang.IObj)
-    (with-meta (into metadata (meta node)))
-    (with-meta (list node) (into {:json/boxed true} metadata))))
-
+;;;;;;;;;;
+;;  core functions to generate zipper-trees from json-object and vice versa.
+;;
 
 (defn jsonToZippertree
   "Transform an in-memory json structure (a nested hash-map/vector) to a tree that can be editted via the Zipper toolset. The nested map is not directly edittable as you can not insert children via the Edit/Replace functionality. The zipperTree resolves this by splitting each map in a set of basic elements, while all compound elements (maps and vectors) are stored in a vector with key :jsonChildren. Vectors are stored as a map with only one key { :jsonChildren  [...] }
@@ -169,8 +168,12 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 	(first node)
 	node))))  
 
-;;
-;; routines needed to generate the 'Huet' zipper for the (modified) json structures.
+
+
+
+
+;;;;;;;;;;
+;; functions needed to generate the 'Huet' zipper on Zipper-trees (and thus on json-objects.
 ;;
 
 (defn jsonBranch?
@@ -199,24 +202,13 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 	  jsonMakeNode
 	  (jsonToZippertree jsonRoot)))
 
-(defn jsonRoot
-  "Extract the root of a jsonZipper and transform the resulting zipperTree to an in-memory json object."
-  [node]
-  {:pre [(isZipper? node)]}
-  (zippertreeToJson (zip/root node)))
 
-;;
+
+
+
+;;;;;;;;;;;;;;;;;
 ;; helper routines for pretty-printing data, extracting  meta-data, extracting path etc...
 ;;
-
-
-(defn zipTop
-  "Move the zipper to the top of the tree (materializing all changes)"
-  [z]
-  (if-let [u (zip/up z)]
-    (recur u)
-      z))
-
 
 (defn pprintJsonSubZipper
   "Traverses a jsonZipper structure and pretty-prints the data in the tree and the corresponding meta-data. (Meta-data is used to store the keys of the original Json-structure."
@@ -281,12 +273,47 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
       "")))   ;; If no children return "" 
 
 
+
+
+
+;;;;;;;;;;
+;; functions to extract and change the meta-data (data about the structures
+;;
+
+(defn jsonPathList
+  "Find the JsonPathList of a sting by moving up and collecting the keys. First item will be '/' (root)."
+  ([node]
+     {:pre [(isZipper? node)]}
+     (jsonPathList node '() ))
+  ([node cumm]
+     (if (seq  node)
+       (recur (zip/up node) (conj cumm (name (:json/key (meta (zip/node node))))))
+       cumm)))
+
+(defn jsonPathStr
+  "Generate a '/' delimited path to the current node. Data can be a json-zipper-tree or a path-list."
+  [data]
+  (if (list? data) 
+    (if (seq data)
+      (let [sData (map #(if (= (type %) (class 1)) (str "[" % "]") %) data) ;; map integer-keys to [i]
+	  res   (apply str (cons (first sData) (interpose "/" (rest sData))))] ;; treat '/' separate
+	res)
+      "NONE")
+    (jsonPathStr (jsonPathList data))))  ;; data is a node. Extract it's pathList
+
+(defn getKey
+  ;; translate a key to an integer if it is a vector-key ("[n]")
+  [key]
+  (if (and (not= (type key) (type :a)) 
+	   (= (first key) \[))
+    (Integer/parseInt (subs key 1 (dec (count key))))
+    key))
+
 (defn jsonKey
   "Return the key of the current node in the jason-zipperTree"
   [zipper]
   {:pre [(isZipper? zipper)]}
   (:json/key (meta (zip/node zipper))))
-
 
 (defn setJsonKey
   "Set a :json/key and :json/type for an element while preserving the existing metadata.
@@ -307,7 +334,6 @@ This function is only used for compound elements (collections) that will be inse
 	metaData  (into keyMeta typeMeta)
 	metaData  (if elemMeta  (into elemMeta metaData) metaData)]  ;; keyMeta and typeMeta should override elemMeta 
   (with-meta element metaData)))
-
 
 (defn jsonType
   "Return the type of the current node in the jason-zipperTree  (jsonTypeMap or jsonTypeVector)."
@@ -336,39 +362,42 @@ This function is only used for compound elements (collections) that will be inse
     (assert false) ;;  "Check code of this function. Apply to element or to a node?"
     (with-meta element metaData)))
 
+(defn isBoxed? [v]
+  (:json/boxed (meta v)))
+
+(defn boxWithMeta [node metadata]
+  (if (contains? (parents (class node)) clojure.lang.IObj)
+    (with-meta (into metadata (meta node)))
+    (with-meta (list node) (into {:json/boxed true} metadata))))
 
 
 
-(defn jsonPathList
-  "Find the JsonPathList of a sting by moving up and collecting the keys. First item will be '/' (root)."
-  ([node]
-     {:pre [(isZipper? node)]}
-     (jsonPathList node '() ))
-  ([node cumm]
-     (if (seq  node)
-       (recur (zip/up node) (conj cumm (name (:json/key (meta (zip/node node))))))
-       cumm)))
-
-(defn jsonPathStr
-  "Generate a '/' delimited path to the current node. Data can be a json-zipper-tree or a path-list."
-  [data]
-  (if (list? data) 
-    (if (seq data)
-      (let [sData (map #(if (= (type %) (class 1)) (str "[" % "]") %) data) ;; map integer-keys to [i]
-	  res   (apply str (cons (first sData) (interpose "/" (rest sData))))] ;; treat '/' separate
-	res)
-      "NONE")
-    (jsonPathStr (jsonPathList data))))  ;; data is a node. Extract it's pathList
 
 
-(defn getKey
-  ;; translate a key to an integer if it is a vector-key ("[n]")
-  [key]
-  (if (and (not= (type key) (type :a)) 
-	   (= (first key) \[))
-    (Integer/parseInt (subs key 1 (dec (count key))))
-    key))
 
+;;;;;;;;;;
+;; Functions to navigate, check and modify the zipper-trees/json-objects.
+;;
+
+(defn isZipper?
+  "Routine to test whether 'zipper' is a real zipper or nil. Used in pre-conditions to prevent extracted nodes from being passed as an argument when actually a zipper is needed."
+  [zipper]
+  (or (nil? zipper)
+      (and (vector? zipper)
+	   (= 2 (count zipper)))))
+
+(defn jsonRoot
+  "Extract the root of a jsonZipper and transform the resulting zipperTree to an in-memory json object."
+  [node]
+  {:pre [(isZipper? node)]}
+  (zippertreeToJson (zip/root node)))
+
+(defn zipTop
+  "Move the zipper to the top of the tree (materializing all changes)"
+  [z]
+  (if-let [u (zip/up z)]
+    (recur u)
+      z))
 
 (defn findChildWithKey
   ;; find the key within the current level of the zipper
@@ -394,8 +423,6 @@ This function is only used for compound elements (collections) that will be inse
 	    (nil? k))
       z   ;; arrived at location (or nil)
       (recur (findChildWithKey z k) ks))))
-
-
 
 (defn processCompoundOper
   "Process an operation 'oper' for a compound object with key 'key' that is a direct child of 'loc'."
@@ -438,9 +465,6 @@ This function is only used for compound elements (collections) that will be inse
 	(dbgmr "res=non-map item" (processCompoundOper newLoc key zip/remove)))
     nil)) ;; failed
 
-
-
-
 (defn insertItem
   "Insert a field in zipper 'loc' at location 'pathlist'/'key' with contents given by 'json'. This function differentiates between simple and compound values (Compound values will be added as a child)."
   [loc pathList key json]
@@ -477,8 +501,7 @@ This function is only used for compound elements (collections) that will be inse
 			nil))  ;; search failed, so return nil
 
 (defn zipReplace [z]
-  (println "Replace needs to be investigated to see whether it preserves keys")
-  )
+  (println "Replace needs to be investigated to see whether it preserves keys"))
 
 (defn replaceItem
   "Insert a field in zipper 'loc' at location 'pathlist'/'key' with contents given by 'json'. This function differentiates between simple and compound values (Compound values should be handled as a child). Also it needs to notice type-changes and take the appropriate action."
