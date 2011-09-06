@@ -185,6 +185,7 @@
 
 ;;;;;;;;;;;;;;;
 ;; test 4   Key handling for vectors (using the "id" field or not)
+;;      (test 8 tests using "name" as vector-id)
 ;;
 
 (def test4a (jsonZipper [{"NO-id" 1  :b "mod-string"}
@@ -339,4 +340,46 @@
   	  (jsonRoot)
   	  (equalForms [-10 -13 -14]))
       "removing second and third item of array.")
+  )
+
+
+;;;;;;;;;;;;;;;
+;; test 8   Key handling for vectors (using the "name" field or not)
+;;      (test 4 containts tests usage of "id" as vector-id)
+;;
+
+(def test8a (jsonZipper [{"NO-name" 1  :b "mod-string"}
+			 {"test" 2  :b  3}
+			 ]))
+(def key8a "[0]")
+
+(def test8b (jsonZipper [{"name" 1  :b "mod-string"}
+			 {"test" 2  :b  3}
+			 ]))
+(def key8b "1")
+
+(def test8c (jsonZipper [{"name" 1  :b "mod-string"}
+			 {"name" 2  :b  3}
+			 ]))
+(def key8c "1")
+
+
+(def key8de "ABCD")
+(def test8d (jsonZipper [{"name" key8de  :b "mod-string"}
+			 {"name" 2  :b  3}
+			 ]))
+
+(def key8e "XYZ")
+(def test8e (jsonZipper {:a [{"name" key8de  :b "mod-string"}
+			     {"name" 2  :b  3}
+			     ]
+			 :z "test"}))
+
+
+(deftest testSuite8
+  (is  (= (jsonKey (zip/down test8a)) key8a))
+  (is  (= (jsonKey (zip/down test8b)) key8b))
+  (is  (= (jsonKey (zip/down test8c)) key8c))
+  (is  (= (jsonKey (zip/down test8d)) key8de))
+  (is  (= (jsonKey (zip/down (zip/down test8e))) key8de))
   )

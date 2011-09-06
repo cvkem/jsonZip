@@ -10,7 +10,7 @@
 (defmacro dbgmi [m x] `(let [x# ~x] (do (println "INS " ~m " : " '~x "=" x#) (flush)) x#))
 (defmacro dbgmr [m x] `(let [x# ~x] (do (println "REMOVE "~m " : " '~x "=" x#) (flush)) x#))
 
-;;(defmacro dbgmi [m x] x)
+(defmacro dbgmi [m x] x)
 (defmacro dbgmr [m x] x)
 
 
@@ -25,7 +25,8 @@
 
 (def allowVectorId true)
 
-(def vectorId  "id")
+;;(def vectorId  "id")
+(def vectorIds  ["id" "Id" "ID" "name" "Name" "NAME"])
 
 
 
@@ -102,21 +103,51 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 			     (map #(into metadata {:json/key (str "[" % "]")} )
 					     (range (count node)))) ;add key (index) to metadata
 	    getVectMetas (fn [node metadata]
-			     (if (or (not allowVectorId) (< (count node) 1))
+			   (let [cn (count node)
+				 checkId (fn [vectorId]
+				   (let [ids (set (map #(get % vectorId) node)) ;; one nil-key allowed!!
+					 cid (count ids)]
+				     (if (and (= cid 1) (= (first ids) nil))  ;; only nil keys
+				       false   ;; no vectorId
+				       (if (< cid cn)    ;; not sufficient keys (one nil allowed)
+					 (do
+					   (when (> cid 1)
+					     (zipError (format
+					       "only %s keys with id '%s' for vector of size %s" cid vectorId cn)))
+					   false)
+					 true))))
+				 findVectId (fn []
+					      (loop [vids vectorIds]
+						(if (not (seq vids))
+						  nil  ;; no id found
+						  (let [vid (first vids)]
+						    (if (checkId vid)
+						      vid  ;; id found
+						      (recur (rest vids)))))))
+				 ]
+			     (if (or (not allowVectorId) (< cn 1))
 			       (getVectIndex node metadata)
-			       (let [cn (count node)
-				     ids (set (map #(get % vectorId) node)) ;; one nil-key allowed!!
-				     cid (count ids)]
-				 (if (and (= cid 1) (= (first ids) nil))  ;; only nil keys
-				   (getVectIndex node metadata)
-				   (if (< cid cn)    ;; not sufficient keys (one nil allowed)
-				     (do
-				       (when (> cid 1)
-					 (zipError (format
-					  "only %s keys for vector of size %s (keys discarded)" cid cn)))
-				       (getVectIndex node metadata))
-				     (map #(into metadata {:json/key (str (get % vectorId))
-							   :json/vectId vectorId} ) node))))))
+			       (if-let [vid (findVectId)]
+				 (map #(into metadata {:json/key (str (get % vid))
+						       :json/vectId vid} ) node)
+				 (getVectIndex node metadata)))))  ;; no vector-id, use index
+	    ;; getVectMetas (fn [node metadata]
+	    ;; 		   (let [cn (count node)
+	    ;; 			 ]
+	    ;; 		     (if (or (not allowVectorId) (< (count node) 1))
+	    ;; 		       (getVectIndex node metadata)
+	    ;; 		       (let [ids (set (map #(get % vectorId) node)) ;; one nil-key allowed!!
+	    ;; 			     cid (count ids)]
+	    ;; 			 (if (and (= cid 1) (= (first ids) nil))  ;; only nil keys
+	    ;; 			   (getVectIndex node metadata)
+	    ;; 			   (if (< cid cn)    ;; not sufficient keys (one nil allowed)
+	    ;; 			     (do
+	    ;; 			       (when (> cid 1)
+	    ;; 				 (zipError (format
+	    ;; 				  "only %s keys for vector of size %s (keys discarded)" cid cn)))
+	    ;; 			       (getVectIndex node metadata))
+	    ;; 			     (map #(into metadata {:json/key (str (get % vectorId))
+	    ;; 						   :json/vectId vectorId} ) node)))))))
 	    visitVector (fn [node metadata]
 			  (let [metas   (getVectMetas node metadata)
 				jsonChildren (vec (map jsonToZippertree node metas))   ;; change LIST to VECTOR
@@ -505,7 +536,7 @@ This function is only used for compound elements (collections) that will be inse
     (let [res (if (keyExistsAux loc key)
 		true ;; key exists
 		(keyExistsAux loc (keywordComplement key)))]
-      (println "RETURN VALUE of keyExists at for " key ": "  res)
+;      (println "RETURN VALUE of keyExists at for " key ": "  res)
       res)))
 
 (defn removeItem
