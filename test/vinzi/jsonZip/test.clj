@@ -113,9 +113,9 @@
   (is (equalForms res_1 (jsonRoot (zip/insert-child testZip insElement))))
   (is (equalForms res_2 (zippertreeToJson (zip/root (zip/append-child (zip/right (zip/down (zip/down testZip))) insElement)))))
   (is (equalForms res_3 (->> insElement
-			    (zip/insert-child (-> testZip (zip/down) (zip/down) (zip/right)))
-			    (zip/root)
-			    (zippertreeToJson))))
+  			    (zip/insert-child (-> testZip (zip/down) (zip/down) (zip/right)))
+  			    (zip/root)
+  			    (zippertreeToJson))))
   (is (equalForms res_4 (zippertreeToJson (zip/root (zip/append-child testZip insElem2)))))
   (is (equalForms "/"  (jsonPathStr testZip)))
   (is (equalForms "/level_0"  (jsonPathStr (zip/down testZip))))
