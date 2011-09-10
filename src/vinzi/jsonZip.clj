@@ -29,7 +29,9 @@
 (def allowVectorId true)
 
 ;;(def vectorId  "id")
-(def vectorIds  ["id" "Id" "ID" "name" "Name" "NAME"])
+(def vectorIds  [:id :Id :ID :name :Name :NAME
+;;		 "id" "Id" "ID" "name" "Name" "NAME" ;; (name :id) will be checked already
+		 ])
 
 
 
@@ -41,19 +43,33 @@
 
 (def zipErrs (atom []))
 
+;; if you set this variable to false the messages are only added to the zipErrs queue.
+(def printZipErrors true)
+(defn setPrintZipErrorsTrue [] (def printZipErrors true))
+(defn setPrintZipErrorsFalse [] (def printZipErrors true))
+
 (defn zipError
   ([msg] (zipError msg nil))
   ([msg ret]
-     (println "ERROR: " msg)
+     (when printZipErrors
+       (println "ERROR: " msg))
      ;; add to error-queue
-     (swap! zipErrs conj msg)
+     (swap! zipErrs conj (str "ZIP-ERROR:" msg))
      ret))
 
+(defn- zipErr
+  "Prefix the internal zipError with a prefix. Zip-error can also be used by other libraries."
+  ([msg] (zipErr msg nil))
+  ([msg ret] (zipError (str "ZIP-ERROR:" msg))))
+  
 (defn getZipErrors []
   @zipErrs)
 
 (defn clearZipErrors []
   (swap! zipErrs (fn [_ _] []) nil))
+
+
+
 
 (declare isZipper?)
 (declare isBoxed?)
@@ -112,7 +128,7 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 				       (if (< cid cn)    ;; not sufficient keys (one nil allowed)
 					 (do
 					   (when (> cid 1)
-					     (zipError (format
+					     (zipErr (format
 					       "only %s keys with id '%s' for vector of size %s" cid vectorId cn)))
 					   false)
 					 true))))
@@ -121,7 +137,8 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 						(if (not (seq vids))
 						  nil  ;; no id found
 						  (let [vid (first vids)]
-						    (if (checkId vid)
+						    (if (or (checkId vid)
+							    (checkId (name vid)))
 						      vid  ;; id found
 						      (recur (rest vids)))))))
 				 ]
@@ -143,7 +160,7 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 	    ;; 			   (if (< cid cn)    ;; not sufficient keys (one nil allowed)
 	    ;; 			     (do
 	    ;; 			       (when (> cid 1)
-	    ;; 				 (zipError (format
+	    ;; 				 (zipErr (format
 	    ;; 				  "only %s keys for vector of size %s (keys discarded)" cid cn)))
 	    ;; 			       (getVectIndex node metadata))
 	    ;; 			     (map #(into metadata {:json/key (str (get % vectorId))
@@ -469,7 +486,7 @@ This function is only used for compound elements (collections) that will be inse
   (zippertreeToJson (zip/root node)))
 
 (defn zipTop
-  "Move the zipper to the top of the tree (materializing all changes)"
+  "Move the zipper to the top of the tree (materializing all changes). If the object is at top already the original object is returned (so you can use identical? to see there are no changes)."
   [z]
   (if-let [u (zip/up z)]
     (recur u)
@@ -486,7 +503,7 @@ This function is only used for compound elements (collections) that will be inse
 	z
 	(recur (zip/right z))))
     (if repErr ;; return nil
-      (zipError (str "key " k " could not be located"))
+      (zipErr (str "key " k " could not be located"))
       nil)))) 
 
 (defn zipLoc
@@ -550,7 +567,7 @@ This function is only used for compound elements (collections) that will be inse
 	  vectKey (if (and vectId (coll? json))
 		    (json vectId) nil)
 	  _    (when (and vectKey (not= vectKey key))
-		 (zipError (format
+		 (zipErr (format
 			    "vector uses field '%s' as id. Key  '%s' replaced by '%s'"
 			    vectId key vectKey)))
 	  key (if vectKey  vectKey key)
@@ -560,7 +577,7 @@ This function is only used for compound elements (collections) that will be inse
 		     {:json/key key})
 	  ]
       (if (keyExistsAt newLoc key)
-	(dbgmi (str  key " exists?:) ") (zipError (str "node with key " key " exists. Insert failed")))
+	(dbgmi (str  key " exists?:) ") (zipErr (str "node with key " key " exists. Insert failed")))
 	(let [;;_     (do (println "The JSON is: ") (pprint json) )
 	      item  (jsonToZippertree json metadata)
 	      ;; _     (let [tmp (jsonZipper {})          
@@ -590,7 +607,7 @@ This function is only used for compound elements (collections) that will be inse
 
 ;; OLD version
     ;;   (if (keyExistsAt newLoc key)
-    ;; 	(dbgmi (str  key " exists?:) ") (zipError (str "node with key " key " exists. Insert failed")))
+    ;; 	(dbgmi (str  key " exists?:) ") (zipErr (str "node with key " key " exists. Insert failed")))
     ;; 	(if (coll? json)
     ;; 	  (if (dbgmi "map has children" (zip/branch? newLoc))
     ;; 	    ;; add compound type as an additional child
