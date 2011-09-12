@@ -75,7 +75,7 @@
 (declare isBoxed?)
 (declare boxWithMeta)
 (declare zipTop)
-
+(declare jsonPathStr)
 
 
 
@@ -88,9 +88,10 @@
   "Transform an in-memory json structure (a nested hash-map/vector) to a tree that can be editted via the Zipper toolset. The nested map is not directly edittable as you can not insert children via the Edit/Replace functionality. The zipperTree resolves this by splitting each map in a set of basic elements, while all compound elements (maps and vectors) are stored in a vector with key :jsonChildren. Vectors are stored as a map with only one key { :jsonChildren  [...] }
 The (original) key is stored in the metadata with key-label :json/key. The key :json/vectId is set to an 'id' if the vector is index by this 'id' instead of the slot-index."
    ([node]
-      (jsonToZippertree node {:json/key "/"}))
-   ([node metadata]
-      (let [isCompound (fn [kv]
+      (jsonToZippertree node {:json/key "/"} () ))
+   ([node metadata cpl]
+      (let [cpl        (conj cpl (:json/key metadata))
+	    isCompound (fn [kv]
 			 (let [v (second kv)]
 			   (and (coll? v)
 				(not (isBoxed? v)))))
@@ -101,7 +102,7 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 			     childMeta (if mn
 					 (map #(into mn {:json/key %}) k)  ;; k should overwrite old keys
 					 (map #(hash-map :json/key %) k)) 
-			     v (map #(jsonToZippertree %1 %2) v childMeta)
+			     v (map #(jsonToZippertree %1 %2 cpl) v childMeta)
 			     kv (partition 2 (interleave k v))
 			     gbkv (group-by isCompound kv)
 			     kvc (get gbkv true)
@@ -125,11 +126,12 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 					 cid (count ids)]
 				     (if (and (= cid 1) (= (first ids) nil))  ;; only nil keys
 				       false   ;; no vectorId
-				       (if (< cid cn)    ;; not sufficient keys (one nil allowed)
+				       (if (< cid (dec cn))    ;; not sufficient keys (one nil allowed)
 					 (do
 					   (when (> cid 1)
 					     (zipErr (format
-					       "only %s keys with id '%s' for vector of size %s" cid vectorId cn)))
+						      "only %s keys with id '%s' for vector of size %s at location %s"
+						      cid vectorId cn (jsonPathStr (reverse cpl)))))
 					   false)
 					 true))))
 				 findVectId (fn []
@@ -137,10 +139,12 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 						(if (not (seq vids))
 						  nil  ;; no id found
 						  (let [vid (first vids)]
-						    (if (or (checkId vid)
-							    (checkId (name vid)))
+						    (if (checkId vid)
 						      vid  ;; id found
-						      (recur (rest vids)))))))
+						      (let [vid (name vid)]
+							(if (checkId vid)
+							vid 
+							(recur (rest vids)))))))))
 				 ]
 			     (if (or (not allowVectorId) (< cn 1))
 			       (getVectIndex node metadata)
@@ -167,9 +171,12 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 	    ;; 						   :json/vectId vectorId} ) node)))))))
 	    visitVector (fn [node metadata]
 			  (let [metas   (getVectMetas node metadata)
-				jsonChildren (vec (map jsonToZippertree node metas))   ;; change LIST to VECTOR
+				jsonChildren (vec (map #(jsonToZippertree %1 %2 cpl) node metas))   ;; change LIST to VECTOR
 				jsonChildrenMeta (with-meta jsonChildren metadata)
 				theMetadata (into metadata {:json/type jsonTypeVector})
+				;; add an additional tag if the direct children have a vector-id
+				vectId (and (seq metas) (:json/vectId (first metas)))
+				theMetadata (if vectId (into theMetadata {:json/vectId vectId}) theMetadata)
 				result  (with-meta {:jsonChildren jsonChildrenMeta} theMetadata)]
 			    result
 			    ))
@@ -579,7 +586,7 @@ This function is only used for compound elements (collections) that will be inse
       (if (keyExistsAt newLoc key)
 	(dbgmi (str  key " exists?:) ") (zipErr (str "node with key " key " exists. Insert failed")))
 	(let [;;_     (do (println "The JSON is: ") (pprint json) )
-	      item  (jsonToZippertree json metadata)
+	      item  (jsonToZippertree json metadata '("---"))
 	      ;; _     (let [tmp (jsonZipper {})          
 	      ;; 		  tmp (zip/replace tmp item)]
 	      ;; 	      (pprintJsonZipper tmp)
