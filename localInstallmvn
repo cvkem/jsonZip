@@ -1,0 +1,2 @@
+lein jar
+mvn install:install-file -DgroupId=jsonzip -DartifactId=jsonzip -Dversion=1.0.0 -Dpackaging=jar -Dfile=/home/cees/Clj/jsonZip/jsonzip-1.0.0.jar

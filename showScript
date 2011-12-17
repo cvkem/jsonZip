@@ -1,0 +1,4 @@
+  (load-file "src/vinzi/jsonZip.clj") (in-ns 'vinzi.jsonZip)
+  (use 'clojure.contrib.json) (use 'clojure.contrib.io)   
+  (with-open [f (reader "../cdfdeMgt/data/EIS.cdfde")]
+    (let [s (read-json f)  t (jsonZipper s)] (showTreeStructure t)))
