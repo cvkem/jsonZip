@@ -1,2 +1,9 @@
+FOLDER=jsonZip
+BASE=jsonzip
+VERSION=1.0.0
+POSTFIX=""     # default is "-SNAPSHOT"
+echo  " Adding  ${BASE}  to the local maven repository"
+
+# the code assumes that the $BASE is the name of the folder and of the target.
 lein jar
-mvn install:install-file -DgroupId=jsonzip -DartifactId=jsonzip -Dversion=1.0.0 -Dpackaging=jar -Dfile=/home/cees/Clj/jsonZip/jsonzip-1.0.0.jar
+mvn install:install-file -DgroupId=${BASE} -DartifactId=${BASE} -Dversion=${VERSION} -Dpackaging=jar -Dfile=/home/cees/Clj/${FOLDER}/${BASE}-${VERSION}${POSTFIX}.jar

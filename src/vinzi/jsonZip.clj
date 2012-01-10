@@ -330,9 +330,11 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 			     cnt (if cnt (inc cnt) 1)]
 			   (assoc cumm path cnt)))
 	findPaths (fn findPaths [loc pPath cumm]
-		    ;; find all paths in zipper 'loc' 'pPath' is path to parent
-		    ;; and 'cumm' contains the discoverd paths where
-		    ;; (keys are path-strings and values are counts.
+		    ;; find all paths in zipper 'loc' where
+		    ;; 'pPath' is path to parent
+		    ;; and 'cumm' contains the discoverd paths
+		    ;; (in this map the keys are path-strings
+		    ;;  and values are number of time this path is used).
 		    (let [node (zip/node loc)
 			  path (generatePath node pPath)
 			  cumm (addPath path cumm)]
@@ -352,6 +354,8 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 			(when (seq ks)
 			  (println (format "%s   %s x %s" nr  (first vs) (first ks)))
 			  (recur (inc nr) (rest ks) (rest vs)))))) ]
+    (println "NOTE: in a json-zipper the basic values are one level"
+	     " higher up in the hierarchy than the compound values")
     (-> zipper
 	(zipTop)
 	(findPaths "" {})
