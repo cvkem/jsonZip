@@ -6,15 +6,15 @@
   )
 
 
-(defmacro dbgi [x] `(let [x# ~x] (do (println "INS " '~x "=" x#) (flush)) x#))
-(defmacro dbgmi [m x] `(let [x# ~x] (do (println "INS " ~m " : " '~x "=" x#) (flush)) x#))
-(defmacro dbgmr [m x] `(let [x# ~x] (do (println "REMOVE "~m " : " '~x "=" x#) (flush)) x#))
+;;(defmacro dbgi [x] `(let [x# ~x] (do (println "INS " '~x "=" x#) (flush)) x#))
+(defmacro zip_dbgmi [m x] `(let [x# ~x] (do (println "INS " ~m " : " '~x "=" x#) (flush)) x#))
+(defmacro zip_dbgmr [m x] `(let [x# ~x] (do (println "REMOVE "~m " : " '~x "=" x#) (flush)) x#))
 
-(defmacro dz [m x] `(let [x# ~x] (do (println ~m " : " '~x "=" x#) (flush)) x#))
+;(defmacro dz [m x] `(let [x# ~x] (do (println ~m " : " '~x "=" x#) (flush)) x#))
 
-(defmacro dbgi [x] x)
-(defmacro dbgmi [m x] x)
-(defmacro dbgmr [m x] x)
+;;(defmacro dbgi [x] x)
+(defmacro zip_dbgmi [m x] x)
+(defmacro zip_dbgmr [m x] x)
 
 
 
@@ -361,12 +361,6 @@ The (original) key is stored in the metadata with key-label :json/key. The key :
 	(findPaths "" {})
 	(showPaths))))
 
-(comment ;; test program for showJsonStructure
-  (load-file "src/vinzi/jsonZip.clj") (in-ns 'vinzi.jsonZip)
-  (use 'clojure.contrib.json) (use 'clojure.contrib.io)   
-  (with-open [f (reader "../cdfdeMgt/data/EIS.cdfde")]
-    (let [s (read-json f)  t (jsonZipper s)] (showJsonStructure t)))
-)
 
 
 
@@ -560,20 +554,20 @@ This function is only used for compound elements (collections) that will be inse
 (defn removeItem
   "Removes a key field from zipper 'loc' at location 'pathlist'/'key'. Key can refer to a child, or to a basic element of a map."
   [loc pathList key]
-  (if-let [newLoc (dbgmr "parent: " (zipLoc loc pathList))]
-    (if (dbgmr "map?: " (= (jsonType newLoc) jsonTypeMap))
+  (if-let [newLoc (zip_dbgmr "parent: " (zipLoc loc pathList))]
+    (if (zip_dbgmr "map?: " (= (jsonType newLoc) jsonTypeMap))
       (let [node (zip/node newLoc)]
 	(if (get node key)
 	  ;; key is a basic key (otherwise compound key(-field))
-	    (dbgmr "result (replace basic map-key): " (zip/replace newLoc (dissoc node key)))
-	    (dbgmr "result (replace compound key): " (processCompoundOper newLoc key zip/remove))))
-	(dbgmr "res=non-map item" (processCompoundOper newLoc key zip/remove)))
+	    (zip_dbgmr "result (replace basic map-key): " (zip/replace newLoc (dissoc node key)))
+	    (zip_dbgmr "result (replace compound key): " (processCompoundOper newLoc key zip/remove))))
+	(zip_dbgmr "res=non-map item" (processCompoundOper newLoc key zip/remove)))
     nil)) ;; failed
 
 (defn- insertItemAux
   "Internal function used by insertItem and replaceItem."
   [loc pathList key status json]
-  (if-let [newLoc (dbgmi "parentLoc" (zipLoc loc pathList))]
+  (if-let [newLoc (zip_dbgmi "parentLoc" (zipLoc loc pathList))]
     (let [vectId (getVectId newLoc)
 	  vectKey (if (and vectId (coll? json))
 		    (json vectId) nil)
@@ -588,7 +582,7 @@ This function is only used for compound elements (collections) that will be inse
 		     {:json/key key})
 	  ]
       (if (keyExistsAt newLoc key)
-	(dbgmi (str  key " exists?:) ") (zipErr (str "node with key " key " exists. Insert failed")))
+	(zip_dbgmi (str  key " exists?:) ") (zipErr (str "node with key " key " exists. Insert failed")))
 	(let [;;_     (do (println "The JSON is: ") (pprint json) )
 	      item  (jsonToZippertree json metadata '("---"))
 	      ;; _     (let [tmp (jsonZipper {})          
@@ -601,45 +595,45 @@ This function is only used for compound elements (collections) that will be inse
 	       	      z)
 	      node  (zip/node newLoc)]
 	  (if (coll? json)
-	    (if (dbgmi "map has children" (zip/branch? newLoc))
+	    (if (zip_dbgmi "map has children" (zip/branch? newLoc))
 	      ;; add compound type as an additional child
-	      (dbgmi "res=add compound" (show "compound child" (zip/append-child newLoc item)))
+	      (zip_dbgmi "res=add compound" (show "compound child" (zip/append-child newLoc item)))
 	      ;; loc has no children yet (so replace full tree)
 	      (let [_       (assert (= (:jsonChildren node) nil))
 		    newNode (assoc node :jsonChildren []) ;; add empty list of children
 		    nLoc  (zip/replace newLoc newNode) ]  
-		(dbgmi "res=insert first-child" (show "compound first Child" (zip/append-child nLoc item)))))
+		(zip_dbgmi "res=insert first-child" (show "compound first Child" (zip/append-child nLoc item)))))
 	    ;; it is a basic type
 	    (if (= (jsonType newLoc) jsonTypeMap)
-	      (dbgmi "res=basic type in map: " (show "basic in map" (zip/replace newLoc (assoc node key item))))
+	      (zip_dbgmi "res=basic type in map: " (show "basic in map" (zip/replace newLoc (assoc node key item))))
 	      ;; append item to vector
-	      (dbgmi "res=basic type on non-map" (show "basic in vector" (zip/append-child newLoc item))))))))
+	      (zip_dbgmi "res=basic type on non-map" (show "basic in vector" (zip/append-child newLoc item))))))))
     nil))  ;; search failed, so return nil
 
 ;; OLD version
     ;;   (if (keyExistsAt newLoc key)
-    ;; 	(dbgmi (str  key " exists?:) ") (zipErr (str "node with key " key " exists. Insert failed")))
+    ;; 	(zip_dbgmi (str  key " exists?:) ") (zipErr (str "node with key " key " exists. Insert failed")))
     ;; 	(if (coll? json)
-    ;; 	  (if (dbgmi "map has children" (zip/branch? newLoc))
+    ;; 	  (if (zip_dbgmi "map has children" (zip/branch? newLoc))
     ;; 	    ;; add compound type as an additional child
     ;; 	    (let [;;item (setJsonKey key (jsonToZippertree json))]
     ;; 		  ;; TODO: take care metadata is propagated correctly in all cases.				      
     ;; 		  item (jsonToZippertree json metadata)
     ;; 		  _  (pprintJsonZipper (jsonZipper item))
     ;; 		  ]
-    ;; 	      (dbgmi "res=add compound" (zip/append-child newLoc item)))
+    ;; 	      (zip_dbgmi "res=add compound" (zip/append-child newLoc item)))
     ;; 	    ;; loc has no children yet (so replace full tree)
     ;; 	    (let [node    (zip/node newLoc)
     ;; 		  jsonNode   (zippertreeToJson node)   ;; step is redundant
     ;; 		  newNodeContents  (assoc jsonNode key json)
-    ;; 		  newNode (dbgmi "newNode with insert " (jsonToZippertree newNodeContents))] ;; generates key
-    ;; 	      (dbgmi "res=insert first-child" (zip/replace newLoc newNode))))
+    ;; 		  newNode (zip_dbgmi "newNode with insert " (jsonToZippertree newNodeContents))] ;; generates key
+    ;; 	      (zip_dbgmi "res=insert first-child" (zip/replace newLoc newNode))))
     ;; 	  ;; it is a basic type
     ;; 	  (let [node (zip/node newLoc)]
     ;; 	    (if (= (jsonType newLoc) jsonTypeMap)
-    ;; 	      (dbgmi "res=basic type in map: " (zip/replace newLoc (assoc node key json)))
+    ;; 	      (zip_dbgmi "res=basic type in map: " (zip/replace newLoc (assoc node key json)))
     ;; 	      (let [item (setJsonKey key json)]
-    ;; 		(dbgmi "res=basic type on non-map" (zip/append-child newLoc item))))))))
+    ;; 		(zip_dbgmi "res=basic type on non-map" (zip/append-child newLoc item))))))))
     ;; nil))  ;; search failed, so return nil
 
 (defn insertItem

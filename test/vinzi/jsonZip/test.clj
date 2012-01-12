@@ -1,11 +1,13 @@
 (ns vinzi.jsonZip.test
   (:use [vinzi.jsonZip] :reload)
-  (:use [clojure [walk :only [postwalk]]
+  (:use [clojure 
+	[walk :only [postwalk]]
 	 pprint
 	 test])
-  (:require  [clojure.contrib
-	      [json :as json]
-	      [duck-streams :as ds :only [reader]]])
+  (:require  [clojure.data
+	      [json :as json])
+  (:require [clojure.java
+		[io :as io ]])
   (:require [clojure.zip :as zip]))
 
 (println)
@@ -172,7 +174,7 @@
       )
 
 
-(def largeJson (with-open [data (ds/reader "./data/EIS-poc.cdfde")]
+(def largeJson (with-open [data (io/reader "./data/EIS-poc.cdfde")]
 		 (json/read-json data)))
 
 ;;;;;;;;;;;;
